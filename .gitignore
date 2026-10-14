@@ -1,0 +1,21 @@
+# System files
+desktop.ini
+.DS_Store
+Thumbs.db
+
+# Internal Claude config
+CLAUDE.md
+
+# Unrelated files
+Crush_of_Alex.pdf
+Stock_CNN_BiLSTM_Attention_Tesla.ipynb
+README_EN.md
+README_VI.md
+Thanh_Paper.pdf
+data_stock/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+.ipynb_checkpoints/
