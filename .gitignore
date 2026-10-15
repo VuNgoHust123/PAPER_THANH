@@ -19,3 +19,9 @@ __pycache__/
 *.pyc
 *.pyo
 .ipynb_checkpoints/
+
+# CatBoost training logs (auto-generated, not needed in repo)
+catboost_info/
+
+# Internal helper scripts used to generate notebooks (not part of the deliverable)
+_scripts/
