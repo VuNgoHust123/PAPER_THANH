@@ -149,9 +149,36 @@ Mục 1–14 của notebook tái hiện trung thành cấu hình bài báo (như
 
 ---
 
-## 9. Mẹo và lưu ý
+## 9. Feature engineering + Stacking ensemble (mục 18–21 trong notebook)
+
+Sau cấu hình cải tiến ở mục 8, notebook thử thêm hai kỹ thuật nữa trên **đúng 4 model này** (không thêm model mới):
+
+- **Feature engineering**: thêm 4 đặc trưng tương tác/tỷ lệ lên trên `selected_features_v2`: `PageValues_per_ProductRelated` (chuẩn hóa PageValues theo số trang xem), `ExitRate_BounceRate_interaction` (tích 2 biến đã bị loại do tương quan Pearson tuyến tính, nhưng tích phi tuyến có thể mang thêm thông tin), `Admin_Info_duration_ratio` (tỷ lệ phản ánh ý định mua), `IsHolidaySeason` (cờ nhị phân mùa lễ hội, thay cho `Month` dạng số không có thứ tự thực).
+- **Stacking ensemble**: ghép 4 model bằng một Logistic Regression meta-learner, học từ xác suất dự đoán **out-of-fold** (StratifiedKFold, K=3) của 4 model con — đảm bảo không model nào thấy dữ liệu nó đang dự đoán khi tạo đặc trưng cho meta-learner, tránh rò rỉ. Ngưỡng quyết định được tune trên một phần validation cắt riêng từ các dự đoán OOF. Do chi phí tính toán tăng (mỗi lần lặp phải huấn luyện 4 model × (3 fold + 1 lần full) = 16 lần fit), số lần lặp giảm xuống `n_repeats_stack=5`.
+
+### Số liệu đo được thực tế (xem `outputs/results_table_stacking.csv`, `outputs/metrics_comparison_stacking.png`)
+
+| Model | Precision | Recall | ROC AUC | F1 |
+|-------|-----------|--------|---------|-----|
+| SVM | 0.580 | 0.712 | 0.894 | 0.639 |
+| XGBoost | 0.642 | 0.702 | 0.927 | 0.671 |
+| CatBoost | 0.634 | 0.702 | 0.923 | 0.666 |
+| BPANN | 0.628 | 0.690 | 0.910 | 0.657 |
+| **Stacking (4 model)** | 0.591 | **0.779** | **0.930** | **0.672** |
+
+### Nhận xét trung thực
+
+- Stacking đạt **ROC AUC cao nhất** (0.930, nhích hơn XGBoost 0.927) và **F1 nhích nhẹ nhất** (0.672 vs 0.671 của XGBoost) — cải thiện thực sự nhưng rất nhỏ, không phải bước nhảy lớn.
+- Điểm đáng chú ý hơn là **sự đánh đổi**: Stacking có **Recall cao hẳn** (0.779, cao hơn model tốt nhất 0.712 của SVM hoặc 0.702 của XGBoost/CatBoost) nhưng **Precision thấp hơn** (0.591, thấp hơn cả XGBoost 0.642). Tức Logistic Regression meta-learner đang nghiêng về bắt nhiều khách mua hơn (ít bỏ sót) nhưng đánh đổi bằng nhiều cảnh báo giả hơn — phù hợp nếu mục tiêu kinh doanh là "không bỏ sót khách tiềm năng" hơn là "giảm chi phí marketing sai đối tượng".
+- Lý do stacking không bứt phá mạnh: XGBoost và CatBoost đã rất mạnh và khá giống nhau (đều là gradient boosting trên cây), nên không mang nhiều thông tin bổ sung cho nhau; SVM và BPANN yếu hơn rõ rệt có thể "kéo" một phần dự đoán sai lệch, hạn chế lợi ích của việc kết hợp.
+- Feature engineering (4 đặc trưng mới ở mục 18) được dùng nhất quán cho cả 4 model trong stacking; chưa có so sánh tách riêng "có feature mới" vs "không có" trong notebook này — nếu muốn đo riêng tác động của feature engineering, cần chạy lại mục 15 (4 model riêng lẻ) với `X_v3` thay `X_v2`.
+
+---
+
+## 10. Mẹo và lưu ý
 
 - Muốn khớp sát số liệu bài báo hơn: tăng `n_repeats` lên 50 trong cell cấu hình, chấp nhận thời gian chạy lâu hơn.
 - Muốn cải thiện Precision: thử tăng ngưỡng quyết định trên 0.5 trong hàm `eval_once_sklearn`/`eval_once_bpann`, hoặc hiệu chỉnh lại SMOTE (ví dụ `sampling_strategy` nhỏ hơn 1.0 thay vì cân bằng hoàn toàn) — đây chính xác là hướng mục 8 đã thử.
+- Muốn tăng Precision của stacking: thử đổi meta-learner từ Logistic Regression sang một model có thể học ngưỡng không tuyến tính hơn (vẫn nên giữ đơn giản để tránh overfit trên chỉ 4 đặc trưng đầu vào), hoặc tune lại ngưỡng theo F-beta nghiêng về precision thay vì F1.
 - Toàn bộ 6 biểu đồ + 1 file CSV kết quả đã được lưu thật vào thư mục `outputs/` khi chạy notebook (không phải placeholder).
 - Kết quả có thể dao động nhẹ giữa các lần chạy do SMOTE và train/test split ngẫu nhiên, nhưng thứ tự xếp hạng model (XGBoost ≈ CatBoost > BPANN > SVM theo ROC AUC) nên ổn định.

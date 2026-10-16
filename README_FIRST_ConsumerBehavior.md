@@ -41,7 +41,9 @@ PAPER_THANH/
     ├── feature_importance.png
     ├── results_table.csv
     ├── metrics_comparison_improved.png           ← Cấu hình cải tiến (mục 15-17 notebook)
-    └── results_table_improved.csv                ← Cấu hình cải tiến (mục 15-17 notebook)
+    ├── results_table_improved.csv                ← Cấu hình cải tiến (mục 15-17 notebook)
+    ├── metrics_comparison_stacking.png           ← Feature engineering + stacking (mục 18-21 notebook)
+    └── results_table_stacking.csv                ← Feature engineering + stacking (mục 18-21 notebook)
 ```
 
 ---
@@ -105,6 +107,17 @@ Sau khi thấy Precision thấp hơn bài báo (mục 6 trong `ConsumerBehavior_
 | `metrics_comparison_improved.png` | Bar chart so sánh 3 phiên bản trên |
 
 Kết quả không đồng nhất: **SVM và BPANN cải thiện rõ** (ROC AUC SVM 0.825→0.894, Precision BPANN 0.514→0.628), **XGBoost và CatBoost gần như không đổi** (các model boosting đã xử lý mất cân bằng tốt sẵn). Giải thích chi tiết ở mục 8 trong `ConsumerBehavior_VI.md`/`ConsumerBehavior_EN.md`.
+
+### Mục 18–21: feature engineering + stacking ensemble
+
+Thêm 4 đặc trưng tương tác/tỷ lệ (`PageValues_per_ProductRelated`, `ExitRate_BounceRate_interaction`, `Admin_Info_duration_ratio`, `IsHolidaySeason`), rồi ghép 4 model bằng stacking (Logistic Regression meta-learner học từ dự đoán out-of-fold của 4 model, tránh rò rỉ dữ liệu). Kết quả thật:
+
+| File | Nội dung |
+|------|---------|
+| `results_table_stacking.csv` | Precision/Recall/ROC AUC/F1 của 4 model cải tiến và Stacking |
+| `metrics_comparison_stacking.png` | Bar chart F1 so sánh 5 cấu hình |
+
+Stacking đạt ROC AUC cao nhất (0.930) và F1 nhích nhẹ nhất (0.672, so với 0.671 của XGBoost) — cải thiện thật nhưng nhỏ. Đáng chú ý hơn là đánh đổi: Recall tăng mạnh (0.779 so với tốt nhất 0.712) nhưng Precision giảm (0.591, thấp hơn XGBoost 0.642) — phù hợp nếu ưu tiên không bỏ sót khách mua hơn là giảm cảnh báo giả. Giải thích chi tiết ở mục 9 trong `ConsumerBehavior_VI.md`/`ConsumerBehavior_EN.md`.
 
 ---
 

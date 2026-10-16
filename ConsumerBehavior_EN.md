@@ -149,9 +149,36 @@ Sections 1–14 faithfully reproduce the paper's setup (as described above). Aft
 
 ---
 
-## 9. Tips & Notes
+## 9. Feature Engineering + Stacking Ensemble (sections 18–21)
+
+Beyond the improved configuration in section 8, the notebook tries two more techniques on the **same 4 models** (no new model added):
+
+- **Feature engineering**: adds 4 interaction/ratio features on top of `selected_features_v2`: `PageValues_per_ProductRelated` (normalizes PageValues by pages viewed), `ExitRate_BounceRate_interaction` (the product of two features dropped for linear Pearson redundancy — but their nonlinear product can carry extra signal), `Admin_Info_duration_ratio` (reflects purchase intent), `IsHolidaySeason` (a binary flag for peak shopping months, replacing the orderless numeric `Month` encoding).
+- **Stacking ensemble**: combines the 4 models via a Logistic Regression meta-learner trained on **out-of-fold** predictions (StratifiedKFold, K=3) from the 4 base models — ensuring no base model ever predicts on data it was trained on when generating meta-features, which would otherwise leak information. The decision threshold is tuned on a slice carved out of those OOF predictions. Because the cost per repeat jumps (4 models × (3 folds + 1 full fit) = 16 fits), the repeat count is reduced to `n_repeats_stack=5`.
+
+### Actually measured numbers (see `outputs/results_table_stacking.csv`, `outputs/metrics_comparison_stacking.png`)
+
+| Model | Precision | Recall | ROC AUC | F1 |
+|-------|-----------|--------|---------|-----|
+| SVM | 0.580 | 0.712 | 0.894 | 0.639 |
+| XGBoost | 0.642 | 0.702 | 0.927 | 0.671 |
+| CatBoost | 0.634 | 0.702 | 0.923 | 0.666 |
+| BPANN | 0.628 | 0.690 | 0.910 | 0.657 |
+| **Stacking (4 models)** | 0.591 | **0.779** | **0.930** | **0.672** |
+
+### Honest takeaway
+
+- Stacking achieves the **highest ROC AUC** (0.930, edging out XGBoost's 0.927) and the **highest F1**, but only marginally (0.672 vs. XGBoost's 0.671) — a real but very small improvement, not a breakthrough.
+- The more notable effect is a **trade-off shift**: stacking has a much **higher recall** (0.779, vs. 0.712 for the best individual model, SVM) but **lower precision** (0.591, lower than even XGBoost's 0.642). The Logistic Regression meta-learner is leaning toward catching more buyers (fewer missed) at the cost of more false alarms — useful if the business goal is "don't miss potential buyers" rather than "minimize wasted marketing spend".
+- Why stacking doesn't break out further: XGBoost and CatBoost are both already strong and fairly similar (both gradient-boosted trees), so they don't offer each other much complementary signal; SVM and BPANN are noticeably weaker and may pull some predictions off, limiting the ensemble's upside.
+- The 4 new features from section 18 are used consistently across all 4 models inside the stacking run; this notebook does not isolate the effect of feature engineering alone (with vs. without the new features) — to measure that separately, rerun section 15's individual models with `X_v3` instead of `X_v2`.
+
+---
+
+## 10. Tips & Notes
 
 - To match the paper's numbers more closely, raise `n_repeats` to 50 in the config cell (longer runtime).
 - To improve precision, try raising the decision threshold above 0.5 in `eval_once_sklearn`/`eval_once_bpann`, or soften SMOTE (e.g., `sampling_strategy` < 1.0 instead of full balancing) — this is exactly the direction section 8 already explores.
+- To improve stacking's precision: try a meta-learner with more nonlinear capacity than Logistic Regression (keep it simple though, to avoid overfitting on just 4 input features), or tune the threshold toward an F-beta score that favors precision over recall.
 - All 6 figures and the results CSV were actually saved to `outputs/` when this notebook was run — not placeholders.
 - Results may vary slightly across runs due to SMOTE and the random train/test splits, but the model ranking (XGBoost ≈ CatBoost > BPANN > SVM by ROC AUC) should remain stable.
