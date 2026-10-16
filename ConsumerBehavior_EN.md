@@ -120,9 +120,38 @@ ROC AUC in this notebook (0.83–0.93) is reasonably close to the paper (0.955�
 
 ---
 
-## 8. Tips & Notes
+## 8. Improved Configuration — same 4 models, retuned parameters/pipeline (sections 15–17)
+
+Sections 1–14 faithfully reproduce the paper's setup (as described above). After seeing precision come in well below the paper's (section 6), the notebook adds **sections 15–17** that try a different configuration for the **exact same 4 models** (SVM/XGBoost/CatBoost/BPANN — no new model added), aiming for better results without "cheating" (nothing is fit on the test set, SMOTE is never applied before the split):
+
+- Replace SMOTE with **class-weighting** (`class_weight="balanced"` for SVM, `scale_pos_weight` for XGBoost, `auto_class_weights="Balanced"` for CatBoost, `pos_weight` in `BCEWithLogitsLoss` for BPANN) — avoids the train/test distribution mismatch SMOTE introduces.
+- **Decision-threshold tuning** via `precision_recall_curve`, maximizing F1 on a validation slice carved out of the training fold (the test set is never touched), instead of a fixed 0.5 threshold.
+- **Light hyperparameter re-search** via `RandomizedSearchCV` (scoring="f1", cv=3, run once on a single split rather than re-run every repeat) instead of reusing the paper's Table 1 values as-is.
+- **Dropping the skewness/mutual-information feature elimination**, keeping only Pearson-redundancy removal (> 0.7) — this keeps 15 of the 17 original features (see `selected_features_v2` in the notebook), since tree-based/neural models don't need near-Gaussian features the way the skewness rule assumes.
+
+### Actually measured numbers — faithful reproduction (section 6) vs. improved configuration (n_repeats=10)
+
+| Model | Precision orig→improved | Recall orig→improved | ROC AUC orig→improved | F1 orig→improved |
+|-------|--------------------------|-----------------------|------------------------|--------------------|
+| SVM | 0.544 → **0.580** | 0.652 → 0.712 | 0.825 → **0.894** | 0.593 → **0.639** |
+| XGBoost | 0.687 → 0.642 | 0.659 → 0.702 | 0.929 → 0.927 | 0.673 → 0.671 |
+| CatBoost | 0.685 → 0.634 | 0.648 → 0.702 | 0.927 → 0.923 | 0.666 → 0.666 |
+| BPANN | 0.514 → **0.628** | 0.804 → 0.690 | 0.908 → 0.910 | 0.627 → **0.658** |
+
+(Real measured numbers from `outputs/results_table_improved.csv` and `outputs/metrics_comparison_improved.png` — not estimates.)
+
+### Honest takeaway — not every model improved equally
+
+- **SVM improved the most**: ROC AUC 0.825→0.894, F1 0.593→0.639. The paper's hyperparameters (C=50.12) likely overfit once SMOTE is removed; `RandomizedSearchCV` found C=1, gamma=0.01 — much smaller and a better fit for `class_weight="balanced"`.
+- **BPANN improved clearly**: F1 0.627→0.658, with a large precision gain (0.514→0.628) at the cost of a modest recall drop (0.804→0.690, still reasonable) — driven by a larger network (`hidden_dim=128`, 2 hidden layers) and class-weighted loss replacing SMOTE.
+- **XGBoost and CatBoost stayed essentially flat** (F1 ~0.67 in both versions): these tree-boosting models already handle class imbalance reasonably well through their structure, so class-weighting plus re-tuning made little net difference — precision dropped slightly while recall rose correspondingly, leaving F1 unchanged.
+- **None of the configurations get close to the paper's reported numbers** (precision 0.90–0.95). The most likely explanation is that the paper applied SMOTE/IsolationForest before splitting train/test (data leakage) — something this notebook deliberately avoids for trustworthy results, so matching the paper's numbers through parameter tuning alone should not be expected.
+
+---
+
+## 9. Tips & Notes
 
 - To match the paper's numbers more closely, raise `n_repeats` to 50 in the config cell (longer runtime).
-- To improve precision, try raising the decision threshold above 0.5 in `eval_once_sklearn`/`eval_once_bpann`, or soften SMOTE (e.g., `sampling_strategy` < 1.0 instead of full balancing).
+- To improve precision, try raising the decision threshold above 0.5 in `eval_once_sklearn`/`eval_once_bpann`, or soften SMOTE (e.g., `sampling_strategy` < 1.0 instead of full balancing) — this is exactly the direction section 8 already explores.
 - All 6 figures and the results CSV were actually saved to `outputs/` when this notebook was run — not placeholders.
 - Results may vary slightly across runs due to SMOTE and the random train/test splits, but the model ranking (XGBoost ≈ CatBoost > BPANN > SVM by ROC AUC) should remain stable.

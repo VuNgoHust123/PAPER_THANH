@@ -120,9 +120,38 @@ ROC AUC của notebook này (0.83–0.93) khá gần với bài báo (0.955–0.
 
 ---
 
-## 8. Mẹo và lưu ý
+## 8. Cấu hình cải tiến — vẫn 4 model này, chỉnh lại tham số/pipeline (mục 15–17 trong notebook)
+
+Mục 1–14 của notebook tái hiện trung thành cấu hình bài báo (như mô tả ở trên). Sau khi thấy Precision thấp hơn bài báo khá nhiều (mục 6), notebook thêm **mục 15–17** để thử một cấu hình khác cho **đúng 4 model SVM/XGBoost/CatBoost/BPANN** (không đổi, không thêm model mới), nhằm cải thiện kết quả mà không "gian lận" (không fit gì trên test, không SMOTE trước khi chia tập):
+
+- Thay SMOTE bằng **class-weighting** (`class_weight="balanced"` cho SVM, `scale_pos_weight` cho XGBoost, `auto_class_weights="Balanced"` cho CatBoost, `pos_weight` trong `BCEWithLogitsLoss` cho BPANN) — tránh lệch phân phối train/test mà SMOTE gây ra.
+- **Hiệu chỉnh ngưỡng quyết định** bằng `precision_recall_curve` tối đa hóa F1 trên một phần validation cắt từ train (test không bao giờ bị động tới), thay vì giữ cố định 0.5.
+- **Tìm lại hyperparameter** bằng `RandomizedSearchCV` (scoring="f1", cv=3, chạy một lần duy nhất trên một split, không chạy lại mỗi lần lặp) thay vì chép nguyên Table 1 của bài báo.
+- **Bỏ bước loại đặc trưng theo skewness/mutual information**, chỉ giữ loại theo tương quan Pearson > 0.7 — giữ lại 15/17 đặc trưng gốc (xem `selected_features_v2` trong notebook) vì model cây/mạng nơ-ron không cần phân phối gần Gauss như rule skewness giả định.
+
+### Số liệu đo được thực tế — bản tái hiện gốc (mục 6) vs bản cải tiến (n_repeats=10)
+
+| Model | Precision gốc→cải tiến | Recall gốc→cải tiến | ROC AUC gốc→cải tiến | F1 gốc→cải tiến |
+|-------|------------------------|---------------------|----------------------|------------------|
+| SVM | 0.544 → **0.580** | 0.652 → 0.712 | 0.825 → **0.894** | 0.593 → **0.639** |
+| XGBoost | 0.687 → 0.642 | 0.659 → 0.702 | 0.929 → 0.927 | 0.673 → 0.671 |
+| CatBoost | 0.685 → 0.634 | 0.648 → 0.702 | 0.927 → 0.923 | 0.666 → 0.666 |
+| BPANN | 0.514 → **0.628** | 0.804 → 0.690 | 0.908 → 0.910 | 0.627 → **0.658** |
+
+(Số liệu đo thật từ `outputs/results_table_improved.csv` và `outputs/metrics_comparison_improved.png`, không phải ước lượng.)
+
+### Nhận xét trung thực — không phải model nào cũng cải thiện
+
+- **SVM cải thiện rõ nhất**: ROC AUC 0.825→0.894, F1 0.593→0.639. Hyperparameter gốc của bài báo (C=50.12) gây overfit khi không còn SMOTE; `RandomizedSearchCV` tìm lại cho C=1, gamma=0.01 — nhỏ hơn hẳn và hợp với `class_weight="balanced"` hơn.
+- **BPANN cải thiện rõ**: F1 0.627→0.658, Precision tăng mạnh (0.514→0.628) đổi lại Recall giảm nhẹ (0.804→0.690) nhưng vẫn ở mức tốt — nhờ mạng lớn hơn (`hidden_dim=128`, 2 lớp ẩn) và loss có trọng số lớp thay SMOTE.
+- **XGBoost và CatBoost gần như không đổi** (F1 ~0.67 cả hai phiên bản): hai model boosting này đã xử lý mất cân bằng lớp khá tốt sẵn qua cấu trúc cây, nên class-weighting + tune lại hyperparameter không tạo khác biệt lớn — Precision giảm nhẹ nhưng Recall tăng tương ứng, F1 tổng thể không đổi.
+- **Không cấu hình nào tới gần mức bài báo báo cáo** (Precision 0.90–0.95). Khả năng cao bài báo đã áp dụng SMOTE/IsolationForest trước khi chia train/test (rò rỉ dữ liệu) — điều notebook này chủ động không làm để kết quả đáng tin cậy, nên không nên kỳ vọng khớp số bài báo bằng cách tinh chỉnh tham số đơn thuần.
+
+---
+
+## 9. Mẹo và lưu ý
 
 - Muốn khớp sát số liệu bài báo hơn: tăng `n_repeats` lên 50 trong cell cấu hình, chấp nhận thời gian chạy lâu hơn.
-- Muốn cải thiện Precision: thử tăng ngưỡng quyết định trên 0.5 trong hàm `eval_once_sklearn`/`eval_once_bpann`, hoặc hiệu chỉnh lại SMOTE (ví dụ `sampling_strategy` nhỏ hơn 1.0 thay vì cân bằng hoàn toàn).
+- Muốn cải thiện Precision: thử tăng ngưỡng quyết định trên 0.5 trong hàm `eval_once_sklearn`/`eval_once_bpann`, hoặc hiệu chỉnh lại SMOTE (ví dụ `sampling_strategy` nhỏ hơn 1.0 thay vì cân bằng hoàn toàn) — đây chính xác là hướng mục 8 đã thử.
 - Toàn bộ 6 biểu đồ + 1 file CSV kết quả đã được lưu thật vào thư mục `outputs/` khi chạy notebook (không phải placeholder).
 - Kết quả có thể dao động nhẹ giữa các lần chạy do SMOTE và train/test split ngẫu nhiên, nhưng thứ tự xếp hạng model (XGBoost ≈ CatBoost > BPANN > SVM theo ROC AUC) nên ổn định.

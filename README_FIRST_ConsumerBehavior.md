@@ -39,7 +39,9 @@ PAPER_THANH/
     ├── roc_curves.png
     ├── confusion_matrices.png
     ├── feature_importance.png
-    └── results_table.csv
+    ├── results_table.csv
+    ├── metrics_comparison_improved.png           ← Cấu hình cải tiến (mục 15-17 notebook)
+    └── results_table_improved.csv                ← Cấu hình cải tiến (mục 15-17 notebook)
 ```
 
 ---
@@ -92,6 +94,17 @@ Notebook này đã được chạy thực tế (không chỉ viết code) — c�
 | `results_table.csv` | Bảng số: Precision/Recall/ROC AUC/Accuracy của notebook này và số liệu tương ứng trong bài báo | Dùng để đối chiếu nhanh bằng Excel/pandas |
 
 Toàn bộ biểu đồ cũng được nhúng trực tiếp trong output của từng cell trong file `.ipynb`.
+
+### Mục 15–17: cấu hình cải tiến (vẫn 4 model này, chỉnh lại tham số)
+
+Sau khi thấy Precision thấp hơn bài báo (mục 6 trong `ConsumerBehavior_VI.md`), notebook có thêm mục 15–17 thử cấu hình khác cho **đúng 4 model SVM/XGBoost/CatBoost/BPANN**: class-weighting thay SMOTE, hiệu chỉnh ngưỡng quyết định trên validation, tìm lại hyperparameter bằng `RandomizedSearchCV`. Kết quả thật:
+
+| File | Nội dung |
+|------|---------|
+| `results_table_improved.csv` | Precision/Recall/ROC AUC của bài báo vs bản tái hiện gốc vs bản cải tiến, cho cả 4 model |
+| `metrics_comparison_improved.png` | Bar chart so sánh 3 phiên bản trên |
+
+Kết quả không đồng nhất: **SVM và BPANN cải thiện rõ** (ROC AUC SVM 0.825→0.894, Precision BPANN 0.514→0.628), **XGBoost và CatBoost gần như không đổi** (các model boosting đã xử lý mất cân bằng tốt sẵn). Giải thích chi tiết ở mục 8 trong `ConsumerBehavior_VI.md`/`ConsumerBehavior_EN.md`.
 
 ---
 
