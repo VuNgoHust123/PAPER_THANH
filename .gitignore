@@ -19,3 +19,14 @@ __pycache__/
 *.pyc
 *.pyo
 .ipynb_checkpoints/
+
+# CatBoost training logs (auto-generated, not needed in repo)
+catboost_info/
+
+# Internal helper scripts used to generate notebooks (not part of the deliverable)
+_scripts/
+
+# REES46 raw data (multi-GB, downloaded separately, not for git)
+data_ecommerce/2019-*.csv
+data_ecommerce/2019-*.csv.zip
+data_ecommerce/2019-*.csv.gz
