@@ -43,7 +43,7 @@ Dữ liệu gốc của paper là **private** (một công ty SaaS e-commerce t�
 |---|---|
 | ML truyền thống (GridSearchCV) | Logistic Regression, Random Forest, Gradient Boosting, KNN, Decision Tree |
 | Deep learning (PyTorch) | MLP, CNN1D, LSTM |
-| **Bổ sung** | **CNN_LSTM_Maxout** — 2 nhánh song song (Conv1D stack + stacked LSTM), **mỗi nhánh giữ nguyên toàn bộ chuỗi `(batch, L, feat_dim)`** (L = số feature, không pool/flatten sớm), kết hợp bằng **maxout theo từng vị trí** (lấy max theo từng phần tử giữa 2 chuỗi), sau đó **Average Pooling theo L** để ra vector `(batch, feat_dim)`, qua Dense+Sigmoid để dự đoán |
+| **Bổ sung** | **CNN_LSTM_Maxout** (phương pháp đề xuất) — 3 nhánh song song: 2 nhánh Conv1D (kernel_size=3 và kernel_size=7, **mỗi nhánh giữ nguyên toàn bộ chuỗi `(batch, L, feat_dim)`**, L = số feature) **cộng lại với nhau** theo từng phần tử thành 1 nhánh CNN tổng, rồi nhánh CNN tổng này được **maxout theo từng vị trí** (lấy max theo từng phần tử) với nhánh stacked LSTM, sau đó **Average Pooling theo L** để ra vector `(batch, feat_dim)`, qua Dense+Sigmoid để dự đoán |
 
 Dữ liệu mất cân bằng được xử lý bằng **SMOTE** (chỉ áp dụng trên tập train, tránh leakage). Train/test split 80/20, stratify theo nhãn. Với 4 model deep learning, tập train sau SMOTE được chia tiếp 85/15 thành train/val (chỉ để theo dõi learning curve, test set luôn giữ nguyên, không dùng để chọn model).
 
@@ -53,17 +53,17 @@ Dữ liệu mất cân bằng được xử lý bằng **SMOTE** (chỉ áp dụ
 
 | Model | Accuracy | ROC AUC | Precision | Recall | F1-Score |
 |---|---|---|---|---|---|
-| **CNN_LSTM_Maxout** | 0.697 | 0.777 | 0.693 | 0.725 | **0.709** |
-| GB | 0.700 | 0.780 | 0.706 | 0.703 | 0.705 |
-| LSTM | 0.699 | 0.779 | 0.703 | 0.704 | 0.704 |
-| DT | 0.689 | 0.764 | 0.697 | 0.687 | 0.692 |
-| MLP | 0.676 | 0.749 | 0.675 | 0.698 | 0.686 |
-| RF | 0.681 | 0.763 | 0.687 | 0.684 | 0.686 |
-| LR | 0.643 | 0.695 | 0.683 | 0.553 | 0.611 |
-| KNN | 0.576 | 0.607 | 0.585 | 0.572 | 0.578 |
-| CNN | 0.623 | 0.675 | 0.718 | 0.427 | 0.535 |
+| LSTM (baseline) | 0.695 | 0.778 | 0.684 | 0.743 | **0.712** |
+| GB (baseline) | 0.700 | 0.780 | 0.706 | 0.703 | 0.705 |
+| DT (baseline) | 0.689 | 0.764 | 0.697 | 0.687 | 0.692 |
+| RF (baseline) | 0.681 | 0.763 | 0.687 | 0.684 | 0.686 |
+| **CNN_LSTM_Maxout** (đề xuất, 3 nhánh: CNN k=3 + CNN k=7 → maxout với LSTM) | 0.696 | 0.777 | 0.727 | 0.644 | 0.683 |
+| MLP (baseline) | 0.676 | 0.747 | 0.685 | 0.670 | 0.677 |
+| CNN (baseline) | 0.678 | 0.751 | 0.710 | 0.620 | 0.662 |
+| LR (baseline) | 0.643 | 0.695 | 0.683 | 0.553 | 0.611 |
+| KNN (baseline) | 0.576 | 0.607 | 0.585 | 0.572 | 0.578 |
 
-Kết quả trên là **sau khi đổi lại kiến trúc `CNN_LSTM_Maxout`**: thay vì mỗi nhánh pool về 1 vector đặc trưng rồi mới maxout, giờ cả 2 nhánh giữ nguyên chuỗi `(batch, L, feat_dim)`, maxout theo từng vị trí trong chuỗi, rồi mới Average Pooling theo `L`. Với thiết kế này, `CNN_LSTM_Maxout` lên **rank 1** (F1 0.709), nhưng vẫn **rất sát GB và LSTM** (chênh 0.004–0.005) — cùng mức nhiễu run-to-run do cuDNN không hoàn toàn deterministic đã quan sát ở bản kiến trúc cũ, nên không thể khẳng định chắc chắn đây là cải thiện có ý nghĩa thống kê mà không chạy nhiều seed.
+Kết quả trên dùng **kiến trúc 3 nhánh mới nhất** của `CNN_LSTM_Maxout` (2 nhánh CNN kernel 3 và 7 cộng lại, rồi maxout với nhánh LSTM) — thử trên cả REES46 và UCI Shoppers theo yêu cầu. Trên REES46, `CNN_LSTM_Maxout` đứng **thứ 5/9** (F1 0.683), thấp hơn bản kiến trúc 2-nhánh trước đó (F1 0.709, từng đứng rank 1) — đổi kiến trúc không cải thiện trên dataset này, ngược lại hơi giảm do nhánh CNN tổng (k=3 + k=7) chiếm ưu thế trong maxout nhiều hơn khiến Recall giảm (0.644 so với 0.725 trước đó) dù Precision tăng (0.727 so với 0.693).
 
 So với paper gốc (F1 tốt nhất 0.89-0.893 trên GB), F1 trên REES46 thấp hơn đáng kể — hợp lý vì thiếu feature địa lý/thiết bị và vì REES46 không có ngữ cảnh lịch sử người dùng xuyên nhiều phiên phong phú như dataset nội bộ của paper.
 
@@ -74,14 +74,16 @@ Ngưỡng mặc định 0.5 không tối ưu cho bài toán mất cân bằng l�
 | Model | best_threshold | F1 (0.5) | F1 (tuned) | Precision (tuned) | Recall (tuned) | Accuracy (tuned) |
 |---|---|---|---|---|---|---|
 | GB | 0.38 | 0.705 | **0.733** | 0.632 | 0.872 | 0.677 |
-| LSTM | 0.39 | 0.704 | 0.733 | 0.632 | 0.872 | 0.677 |
-| CNN_LSTM_Maxout | 0.39 | 0.709 | 0.729 | 0.611 | 0.904 | 0.659 |
+| LSTM | 0.41 | 0.712 | 0.733 | 0.625 | 0.885 | 0.672 |
+| **CNN_LSTM_Maxout** | 0.35 | 0.683 | 0.729 | 0.616 | 0.894 | 0.663 |
 | DT | 0.36 | 0.692 | 0.726 | 0.611 | 0.894 | 0.657 |
-| MLP | 0.41 | 0.686 | 0.718 | 0.594 | 0.908 | 0.637 |
+| MLP | 0.43 | 0.677 | 0.715 | 0.611 | 0.861 | 0.651 |
+| CNN | 0.36 | 0.662 | 0.714 | 0.607 | 0.867 | 0.647 |
 | RF | 0.48 | 0.686 | 0.695 | 0.676 | 0.716 | 0.681 |
 | LR | 0.44 | 0.611 | 0.691 | 0.583 | 0.849 | 0.614 |
-| CNN | 0.33 | 0.535 | 0.675 | 0.538 | 0.904 | 0.557 |
 | KNN | 0.40 | 0.579 | 0.633 | 0.555 | 0.737 | 0.566 |
+
+Sau khi tune threshold, `CNN_LSTM_Maxout` (3 nhánh) thu hẹp khoảng cách lại gần nhóm đầu (F1 0.729, chỉ thua GB/LSTM 0.004) — ngưỡng tối ưu thấp (0.35) đẩy Recall lên 0.894, gần bù lại Precision thấp hơn ở ngưỡng mặc định.
 
 Quan sát:
 - Mọi model đều có ngưỡng tối ưu **thấp hơn 0.5** (0.31–0.48) — vì lớp "purchase" thực tế hiếm hơn trong dữ liệu gốc (trước SMOTE), ngưỡng 0.5 mặc định quá "khắt khe".
