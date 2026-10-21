@@ -43,7 +43,7 @@ Dữ liệu gốc của paper là **private** (một công ty SaaS e-commerce t�
 |---|---|
 | ML truyền thống (GridSearchCV) | Logistic Regression, Random Forest, Gradient Boosting, KNN, Decision Tree |
 | Deep learning (PyTorch) | MLP, CNN1D, LSTM |
-| **Bổ sung (đề xuất)** | **CNN_LSTM_Maxout** — 2 nhánh song song: 1 nhánh CNN **residual block** (Conv1D→BN→ReLU→Conv1D→BN, cộng với shortcut 1×1-conv, rồi ReLU; kernel_size=3, **giữ nguyên toàn bộ chuỗi `(batch, L, feat_dim)`**, L = số feature) được **maxout theo từng vị trí** với nhánh stacked LSTM, sau đó **Average Pooling theo L** để ra vector `(batch, feat_dim)`, qua Dense+Sigmoid để dự đoán |
+| **Bổ sung (đề xuất)** | **CNN_LSTM_Maxout** — 3 nhánh song song: 2 nhánh CNN **residual block** (Conv1D→BN→ReLU→Conv1D→BN, cộng với shortcut 1×1-conv, rồi ReLU; kernel_size=3 và kernel_size=7, **mỗi nhánh giữ nguyên toàn bộ chuỗi `(batch, L, feat_dim)`**, L = số feature) **cộng lại với nhau** theo từng phần tử thành 1 nhánh CNN tổng, rồi nhánh CNN tổng này được **maxout theo từng vị trí** với nhánh stacked LSTM, sau đó **Average Pooling theo L** để ra vector `(batch, feat_dim)`, qua Dense+Sigmoid để dự đoán |
 | **Bổ sung (baseline residual)** | **ResNet1D** — Conv1D stem rồi 3 **residual block** 1D xếp chồng (mỗi block: Conv1D→BN→ReLU→Conv1D→BN, cộng với input của chính block đó, rồi ReLU), sau đó Global Average Pooling theo `L`, qua Dense+Sigmoid — một kiến trúc ResNet thuần (không có nhánh LSTM/maxout) để so sánh riêng hiệu quả của residual connection |
 
 Dữ liệu mất cân bằng được xử lý bằng **SMOTE** (chỉ áp dụng trên tập train, tránh leakage). Train/test split 80/20, stratify theo nhãn. Với 5 model deep learning, tập train sau SMOTE được chia tiếp 85/15 thành train/val (chỉ để theo dõi learning curve, test set luôn giữ nguyên, không dùng để chọn model).
@@ -55,17 +55,17 @@ Dữ liệu mất cân bằng được xử lý bằng **SMOTE** (chỉ áp dụ
 | Model | Accuracy | ROC AUC | Precision | Recall | F1-Score |
 |---|---|---|---|---|---|
 | GB (baseline) | 0.700 | 0.780 | 0.706 | 0.703 | **0.705** |
-| LSTM (baseline) | 0.700 | 0.779 | 0.707 | 0.701 | 0.704 |
-| **ResNet1D** (baseline residual, 3 residual block + GAP) | 0.689 | 0.766 | 0.694 | 0.696 | 0.695 |
+| LSTM (baseline) | 0.699 | 0.778 | 0.703 | 0.706 | 0.704 |
+| **CNN_LSTM_Maxout** (đề xuất, CNN residual k=3 + k=7 → maxout với LSTM) | 0.697 | 0.772 | 0.699 | 0.710 | 0.704 |
+| **ResNet1D** (baseline residual, 3 residual block + GAP) | 0.694 | 0.772 | 0.692 | 0.716 | 0.704 |
 | DT (baseline) | 0.689 | 0.764 | 0.697 | 0.687 | 0.692 |
 | RF (baseline) | 0.681 | 0.763 | 0.687 | 0.684 | 0.686 |
-| **CNN_LSTM_Maxout** (đề xuất, 2 nhánh: CNN residual k=3 → maxout với LSTM) | 0.690 | 0.771 | 0.711 | 0.657 | 0.683 |
-| MLP (baseline) | 0.678 | 0.749 | 0.709 | 0.619 | 0.661 |
-| CNN (baseline) | 0.649 | 0.706 | 0.686 | 0.571 | 0.623 |
+| MLP (baseline) | 0.672 | 0.742 | 0.699 | 0.623 | 0.659 |
+| CNN (baseline) | 0.673 | 0.743 | 0.716 | 0.590 | 0.647 |
 | LR (baseline) | 0.643 | 0.695 | 0.683 | 0.553 | 0.611 |
 | KNN (baseline) | 0.576 | 0.607 | 0.585 | 0.572 | 0.578 |
 
-Rút `CNN_LSTM_Maxout` từ 3 nhánh (CNN k=3 + CNN k=7 residual, cộng lại rồi maxout với LSTM, F1=0.704) về lại **2 nhánh** (bỏ nhánh CNN k=7, chỉ giữ 1 CNN residual k=3 maxout trực tiếp với LSTM) làm F1 giảm xuống **0.683** trên REES46 — gần với bản 3-nhánh Conv1D thuần ban đầu (0.683) và thấp hơn cả `ResNet1D` (0.695). Điều này cho thấy trên REES46, phần cải thiện lớn nhất không đến từ residual connection đơn lẻ mà đến từ việc **cộng 2 nhánh CNN đa kernel (k=3+k=7) trước khi maxout với LSTM** — bỏ nhánh CNN thứ hai làm mất đi phần representation đa tỷ lệ (multi-scale) đó.
+Đổi nhánh CNN của `CNN_LSTM_Maxout` từ Conv1D thuần sang **residual block** (Conv1D→BN→ReLU→Conv1D→BN + shortcut, rồi ReLU) cải thiện rõ trên REES46: F1 tăng từ 0.683 (3-nhánh Conv1D thuần) lên **0.704**, quay lại sát nhóm đầu (chỉ thua GB/LSTM 0.001). `ResNet1D` (baseline thuần residual, không có nhánh LSTM/maxout) cũng đạt F1=0.704 — cho thấy phần lớn cải thiện đến từ **residual connection** chứ không hẳn từ việc kết hợp CNN+LSTM.
 
 So với paper gốc (F1 tốt nhất 0.89-0.893 trên GB), F1 trên REES46 thấp hơn đáng kể — hợp lý vì thiếu feature địa lý/thiết bị và vì REES46 không có ngữ cảnh lịch sử người dùng xuyên nhiều phiên phong phú như dataset nội bộ của paper.
 
@@ -75,18 +75,18 @@ Ngưỡng mặc định 0.5 không tối ưu cho bài toán mất cân bằng l�
 
 | Model | best_threshold | F1 (0.5) | F1 (tuned) | Precision (tuned) | Recall (tuned) | Accuracy (tuned) |
 |---|---|---|---|---|---|---|
-| LSTM | 0.37 | 0.704 | **0.734** | 0.625 | 0.888 | 0.672 |
-| GB | 0.38 | 0.705 | 0.733 | 0.632 | 0.872 | 0.677 |
-| **CNN_LSTM_Maxout** | 0.33 | 0.683 | 0.730 | 0.622 | 0.884 | 0.667 |
+| GB | 0.38 | 0.705 | **0.733** | 0.632 | 0.872 | 0.677 |
+| **CNN_LSTM_Maxout** | 0.37 | 0.704 | 0.731 | 0.612 | 0.906 | 0.661 |
+| LSTM | 0.40 | 0.704 | 0.730 | 0.626 | 0.877 | 0.671 |
 | DT | 0.36 | 0.692 | 0.726 | 0.611 | 0.894 | 0.657 |
-| **ResNet1D** | 0.41 | 0.695 | 0.725 | 0.604 | 0.906 | 0.650 |
-| MLP | 0.37 | 0.661 | 0.716 | 0.592 | 0.904 | 0.635 |
+| **ResNet1D** | 0.42 | 0.704 | 0.725 | 0.626 | 0.860 | 0.668 |
+| MLP | 0.35 | 0.659 | 0.714 | 0.585 | 0.917 | 0.627 |
+| CNN | 0.36 | 0.647 | 0.706 | 0.600 | 0.858 | 0.637 |
 | RF | 0.48 | 0.686 | 0.695 | 0.676 | 0.716 | 0.681 |
-| CNN | 0.37 | 0.623 | 0.691 | 0.555 | 0.916 | 0.584 |
 | LR | 0.44 | 0.611 | 0.691 | 0.583 | 0.849 | 0.614 |
 | KNN | 0.40 | 0.579 | 0.633 | 0.555 | 0.737 | 0.566 |
 
-Sau khi tune threshold, `CNN_LSTM_Maxout` (2-nhánh, chỉ 1 CNN residual) đứng **thứ 3/10** (F1 0.730) — vẫn gần nhóm đầu (thua LSTM/GB ~0.003-0.004) nhưng thấp hơn bản 3-nhánh residual trước đó (0.731) và bản 3-nhánh Conv1D thuần (0.729), xác nhận lại nhận xét ở bảng trên: bỏ nhánh CNN k=7 làm mất một phần lợi thế multi-scale trên REES46.
+Sau khi tune threshold, `CNN_LSTM_Maxout` (residual) đứng **thứ 2/10** (F1 0.731, chỉ thua GB 0.002) — tốt hơn cả bản 3-nhánh Conv1D thuần trước đó (0.729) lẫn `ResNet1D` (0.725).
 
 Quan sát:
 - Mọi model đều có ngưỡng tối ưu **thấp hơn 0.5** (0.31–0.48) — vì lớp "purchase" thực tế hiếm hơn trong dữ liệu gốc (trước SMOTE), ngưỡng 0.5 mặc định quá "khắt khe".
@@ -111,8 +111,6 @@ Quan sát:
 | dow | 0.0002 |
 | weekend | 0.0001 |
 | price_change | 0.0000 |
-
-(Số liệu không đổi đáng kể sau khi đơn giản hóa `CNN_LSTM_Maxout` về 2 nhánh — model GB và best-model fallback cho permutation importance không phụ thuộc vào kiến trúc deep learning này.)
 
 ### Trả lời RQ1 & RQ2
 
@@ -158,22 +156,22 @@ Vì F1 trên REES46 thấp hơn nhiều so với paper gốc và thiếu RQ3, no
 
 ### Kết quả: baseline Paper2 vs phương pháp đề xuất (test set, 2,466 session)
 
-8 model đầu là baseline tái hiện từ Paper2 (LR, RF, GB, KNN, DT, MLP, CNN, LSTM). `CNN_LSTM_Maxout` là **phương pháp đề xuất**, gồm 2 nhánh song song: 1 nhánh CNN **residual block** (kernel_size=3, giữ nguyên sequence `(B, L, D)`) được maxout (lấy max theo từng phần tử) trực tiếp với nhánh LSTM, sau đó average-pool theo `L`, qua Dense+Sigmoid. `ResNet1D` là baseline residual thuần thêm vào để so sánh (Conv1D stem + 3 residual block + Global Average Pooling, không có LSTM/maxout).
+8 model đầu là baseline tái hiện từ Paper2 (LR, RF, GB, KNN, DT, MLP, CNN, LSTM). `CNN_LSTM_Maxout` là **phương pháp đề xuất**, gồm 3 nhánh song song: 2 nhánh CNN **residual block** (kernel_size=3 và kernel_size=7, cùng giữ nguyên sequence `(B, L, D)`) cộng lại với nhau theo từng phần tử, rồi nhánh CNN tổng này được maxout (lấy max theo từng phần tử) với nhánh LSTM, sau đó average-pool theo `L`, qua Dense+Sigmoid. `ResNet1D` là baseline residual thuần thêm vào để so sánh (Conv1D stem + 3 residual block + Global Average Pooling, không có LSTM/maxout).
 
 | Model | Accuracy | ROC AUC | Precision | Recall | F1-Score |
 |---|---|---|---|---|---|
 | **RF** (baseline mạnh nhất) | 0.895 | 0.921 | 0.661 | 0.662 | **0.661** |
-| LSTM (baseline) | 0.873 | 0.911 | 0.565 | 0.772 | 0.653 |
-| CNN (baseline) | 0.869 | 0.905 | 0.556 | 0.775 | 0.648 |
-| MLP (baseline) | 0.872 | 0.887 | 0.566 | 0.749 | 0.645 |
-| **CNN_LSTM_Maxout** (đề xuất, 2 nhánh: CNN residual k=3 → maxout với LSTM) | 0.862 | 0.904 | 0.536 | 0.798 | 0.641 |
-| **ResNet1D** (baseline residual thuần) | 0.862 | 0.897 | 0.536 | 0.791 | 0.639 |
+| LSTM (baseline) | 0.869 | 0.912 | 0.555 | 0.791 | 0.652 |
+| MLP (baseline) | 0.868 | 0.886 | 0.552 | 0.777 | 0.646 |
+| CNN (baseline) | 0.867 | 0.904 | 0.551 | 0.772 | 0.643 |
+| **CNN_LSTM_Maxout** (đề xuất, CNN residual k=3 + k=7 → maxout với LSTM) | 0.863 | 0.906 | 0.540 | 0.793 | 0.643 |
+| **ResNet1D** (baseline residual thuần) | 0.858 | 0.886 | 0.529 | 0.793 | 0.635 |
 | GB (baseline) | 0.885 | 0.912 | 0.627 | 0.641 | 0.634 |
 | DT (baseline) | 0.876 | 0.849 | 0.603 | 0.589 | 0.596 |
 | LR (baseline) | 0.659 | 0.850 | 0.297 | 0.877 | 0.444 |
 | KNN (baseline) | 0.763 | 0.722 | 0.340 | 0.563 | 0.424 |
 
-Sau khi tune threshold trên tập validation: RF F1=0.666 (threshold 0.45), CNN_LSTM_Maxout (2-nhánh residual) F1=0.643 (threshold 0.56), ResNet1D F1=0.617 (threshold 0.29) — cả hai **vẫn chưa vượt được RF** trên dataset này. Rút gọn từ 3 nhánh xuống 2 nhánh gần như không đổi ở threshold 0.5 (0.641 so với 0.643 trước), và F1 sau tune còn nhích nhẹ hơn bản 3-nhánh residual (0.643 so với 0.633) — trên UCI Shoppers, bỏ nhánh CNN k=7 không làm giảm hiệu quả, khác với REES46.
+Sau khi tune threshold trên tập validation: RF F1=0.666 (threshold 0.45), CNN_LSTM_Maxout (residual) F1=0.633 (threshold 0.37), ResNet1D F1=0.635 (threshold 0.52) — cả hai **vẫn chưa vượt được RF** trên dataset này, và đổi CNN branch sang residual không cải thiện so với Conv1D thuần ở bản trước (0.644 tuned).
 
 **F1 và ROC AUC cao hơn rõ rệt so với REES46** (ROC AUC ~0.90-0.92 so với ~0.78) — dataset này có tín hiệu dự đoán mạnh hơn nhiều, chủ yếu nhờ `PageValues` (một feature do Google Analytics tính sẵn, gần như lộ thông tin về khả năng mua). RF vẫn dẫn đầu F1 nhờ khai thác trực tiếp `PageValues`; các model deep learning có Recall cao hơn nhưng Precision thấp hơn.
 
@@ -183,8 +181,7 @@ Sau khi tune threshold trên tập validation: RF F1=0.666 (threshold 0.45), CNN
 1. **2 nhánh (CNN + LSTM), fuse bằng blend maxout/average**: sweep `blend_weight` ∈ {0, 0.25, 0.5, 0.75, 1} cho F1 tốt nhất ở `blend_weight=0.25` (F1=0.638 trong ablation, 0.644 sau tune threshold khi train lại chính thức).
 2. **3 nhánh (CNN k=3 + CNN k=7 Conv1D thuần cộng lại, rồi maxout với LSTM)**: F1=0.638 (threshold 0.5) / 0.642 (tuned) — tương đương biến thể 2-nhánh-blend.
 3. **3 nhánh, CNN branch đổi thành residual block** (cấu hình hiện tại trong notebook): F1=0.643 (threshold 0.5) / 0.633 (tuned) — nhích nhẹ ở threshold 0.5 so với biến thể 2 nhưng không cải thiện sau khi tune threshold.
-4. **ResNet1D độc lập** (không có nhánh LSTM): F1=0.639/0.617 — thấp hơn `CNN_LSTM_Maxout`, cho thấy nhánh LSTM vẫn đóng góp giá trị trên dataset này.
-5. **2 nhánh, chỉ 1 CNN residual block (bỏ nhánh k=7) → maxout với LSTM** (cấu hình hiện tại trong notebook): F1=0.641 (threshold 0.5) / 0.643 (tuned) — gần như không đổi so với biến thể 3 nhánh (0.643/0.633), cho thấy trên UCI Shoppers nhánh CNN k=7 không đóng góp nhiều; đơn giản hóa kiến trúc không đánh đổi hiệu năng ở dataset này.
+4. **ResNet1D độc lập** (không có nhánh LSTM): F1=0.635/0.635 — thấp hơn cả `CNN_LSTM_Maxout`, cho thấy nhánh LSTM vẫn đóng góp giá trị trên dataset này.
 
 Trên UCI Shoppers, các hướng mở rộng kiến trúc đều chỉ xoay quanh F1≈0.63-0.65, trong khi RF giữ F1≈0.66 — khoảng cách này chủ yếu do RF khai thác `PageValues` hiệu quả hơn là do thiếu năng lực biểu diễn của nhánh deep learning.
 
