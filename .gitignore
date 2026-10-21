@@ -30,3 +30,6 @@ _scripts/
 data_ecommerce/2019-*.csv
 data_ecommerce/2019-*.csv.zip
 data_ecommerce/2019-*.csv.gz
+
+# RF checkpoint exceeds GitHub's 100MB file limit (~104MB, deep/unbounded trees from GridSearchCV); kept locally only
+checkpoints/RF.joblib

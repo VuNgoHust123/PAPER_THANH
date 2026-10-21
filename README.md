@@ -45,7 +45,7 @@ Dữ liệu gốc của paper là **private** (một công ty SaaS e-commerce t�
 | Deep learning (PyTorch) | MLP, CNN1D, LSTM |
 | **Bổ sung** | **CNN_LSTM_Maxout** — 2 nhánh song song (Conv1D stack + stacked LSTM), mỗi nhánh cho ra vector đặc trưng 64 chiều, kết hợp bằng **maxout** (lấy max theo từng phần tử), qua Dense+Sigmoid để dự đoán |
 
-Dữ liệu mất cân bằng được xử lý bằng **SMOTE** (chỉ áp dụng trên tập train, tránh leakage). Train/test split 80/20, stratify theo nhãn.
+Dữ liệu mất cân bằng được xử lý bằng **SMOTE** (chỉ áp dụng trên tập train, tránh leakage). Train/test split 80/20, stratify theo nhãn. Với 4 model deep learning, tập train sau SMOTE được chia tiếp 85/15 thành train/val (chỉ để theo dõi learning curve, test set luôn giữ nguyên, không dùng để chọn model).
 
 ## 4. Kết quả
 
@@ -53,17 +53,17 @@ Dữ liệu mất cân bằng được xử lý bằng **SMOTE** (chỉ áp dụ
 
 | Model | Accuracy | ROC AUC | Precision | Recall | F1-Score |
 |---|---|---|---|---|---|
-| **CNN_LSTM_Maxout** | 0.700 | 0.780 | 0.690 | **0.743** | **0.716** |
+| **CNN_LSTM_Maxout** | 0.695 | 0.778 | 0.683 | **0.746** | **0.713** |
 | GB | 0.700 | 0.780 | 0.706 | 0.703 | 0.705 |
-| LSTM | 0.699 | 0.779 | 0.711 | 0.686 | 0.698 |
+| LSTM | 0.699 | 0.777 | 0.704 | 0.705 | 0.704 |
 | DT | 0.689 | 0.764 | 0.697 | 0.687 | 0.692 |
-| MLP | 0.687 | 0.759 | 0.695 | 0.683 | 0.689 |
 | RF | 0.681 | 0.763 | 0.687 | 0.684 | 0.686 |
+| MLP | 0.661 | 0.746 | 0.723 | 0.540 | 0.618 |
 | LR | 0.643 | 0.695 | 0.683 | 0.553 | 0.611 |
-| CNN | 0.630 | 0.690 | 0.672 | 0.533 | 0.595 |
 | KNN | 0.576 | 0.607 | 0.585 | 0.572 | 0.578 |
+| CNN | 0.631 | 0.688 | 0.699 | 0.481 | 0.570 |
 
-**`CNN_LSTM_Maxout` đạt F1 và Recall cao nhất** trong toàn bộ 9 model, nhỉnh hơn Gradient Boosting (model tốt nhất trong paper gốc). Maxout fusion tận dụng được tín hiệu local pattern từ nhánh CNN và tín hiệu tuần tự từ nhánh LSTM tốt hơn từng nhánh riêng lẻ (CNN đơn lẻ là model DL yếu nhất, F1 0.595).
+**`CNN_LSTM_Maxout` đạt F1 và Recall cao nhất** trong toàn bộ 9 model, nhỉnh hơn Gradient Boosting (model tốt nhất trong paper gốc). Maxout fusion tận dụng được tín hiệu local pattern từ nhánh CNN và tín hiệu tuần tự từ nhánh LSTM tốt hơn từng nhánh riêng lẻ (CNN đơn lẻ là model DL yếu nhất, F1 0.570).
 
 So với paper gốc (F1 tốt nhất 0.89-0.893 trên GB), F1 trên REES46 thấp hơn đáng kể — hợp lý vì thiếu feature địa lý/thiết bị và vì REES46 không có ngữ cảnh lịch sử người dùng xuyên nhiều phiên phong phú như dataset nội bộ của paper.
 
@@ -97,6 +97,18 @@ So với paper gốc (F1 tốt nhất 0.89-0.893 trên GB), F1 trên REES46 th�
 - [`outputs/rees46_outcome_distribution.png`](outputs/rees46_outcome_distribution.png) — tỷ lệ purchase/abandon trên tập mẫu.
 - [`outputs/rees46_price_vs_outcome.png`](outputs/rees46_price_vs_outcome.png) — phân phối giá và giá theo outcome (tương ứng Figure 5/6 của paper).
 - [`outputs/rees46_shap_feature_importance.png`](outputs/rees46_shap_feature_importance.png) — SHAP feature importance cho model GB (tương ứng Figure 8 của paper).
+- [`outputs/rees46_curves_MLP.png`](outputs/rees46_curves_MLP.png), [`outputs/rees46_curves_CNN.png`](outputs/rees46_curves_CNN.png), [`outputs/rees46_curves_LSTM.png`](outputs/rees46_curves_LSTM.png), [`outputs/rees46_curves_CNN_LSTM_Maxout.png`](outputs/rees46_curves_CNN_LSTM_Maxout.png) — train/val loss và accuracy theo epoch cho từng model deep learning.
+- [`outputs/rees46_confusion_matrices.png`](outputs/rees46_confusion_matrices.png) — confusion matrix của cả 9 model trên test set.
+- [`outputs/rees46_roc_curves.png`](outputs/rees46_roc_curves.png) — ROC curve chồng của cả 9 model (kèm AUC) trên test set.
+- [`outputs/rees46_correlation_matrix.png`](outputs/rees46_correlation_matrix.png) — ma trận tương quan Pearson giữa 14 feature cấp session.
+
+### Checkpoint
+
+Toàn bộ model đã train được lưu trong `checkpoints/`:
+- Model sklearn (LR, RF, GB, KNN, DT): file `.joblib` (best estimator sau GridSearchCV).
+- Model PyTorch (MLP, CNN, LSTM, CNN_LSTM_Maxout): file `.pt` (state_dict).
+
+**Lưu ý:** `checkpoints/RF.joblib` (~104MB, do GridSearchCV chọn cây không giới hạn độ sâu) vượt giới hạn 100MB của GitHub nên **không được push lên repo** (đã thêm vào `.gitignore`) — chỉ tồn tại ở máy đã chạy notebook. Muốn có lại file này, chạy lại cell GridSearchCV của RF trong notebook.
 
 ## 5. Hạn chế
 
