@@ -140,3 +140,49 @@ Toàn bộ model đã train được lưu trong `checkpoints/`:
 - SMOTE chỉ áp dụng trên tập train (paper mô tả áp dụng trước khi split) — thay đổi này nhằm tránh data leakage, là thực hành tốt hơn.
 - Dù cố định `seed=42`, các model PyTorch chạy trên GPU không hoàn toàn deterministic (cuDNN) — chạy lại notebook có thể cho kết quả F1 lệch vài phần nghìn và đổi thứ hạng giữa các model có F1 gần nhau (đặc biệt top-3: GB, CNN_LSTM_Maxout, LSTM).
 - Ngưỡng tối ưu (threshold tuning) được chọn trên tập validation được trích từ tập train sau SMOTE; với 5 model sklearn, tập validation này vẫn nằm trong dữ liệu `GridSearchCV` đã thấy khi train (do sklearn train trên toàn bộ `X_train_bal`), nên ngưỡng tối ưu có thể hơi lạc quan hơn một chút so với dùng validation set hoàn toàn độc lập.
+
+## 6. Notebook thay thế: UCI Online Shoppers Purchasing Intention
+
+Notebook: [`Purchase_Intent_UCI_Shoppers.ipynb`](Purchase_Intent_UCI_Shoppers.ipynb)
+
+Vì F1 trên REES46 thấp hơn nhiều so với paper gốc và thiếu RQ3, notebook này dùng **UCI Online Shoppers Purchasing Intention Dataset** (`data_ecommerce/online_shoppers_intention.csv`, 12,330 session) — dataset đã có sẵn feature cấp session (không cần tự build từ raw event log như REES46), dùng cùng pipeline 9 model (LR, RF, GB, KNN, DT, MLP, CNN1D, LSTM, CNN_LSTM_Maxout với kiến trúc sequence+average-pooling mới nhất).
+
+**Đổi lại:** dataset này **không có giá sản phẩm hay danh mục**, nên **không trả lời được RQ1 (category) và RQ2 (price)** như paper gốc / như notebook REES46. 17 feature dùng: `Administrative(_Duration)`, `Informational(_Duration)`, `ProductRelated(_Duration)`, `BounceRates`, `ExitRates`, `PageValues`, `SpecialDay`, `Month`, `OperatingSystems`, `Browser`, `Region`, `TrafficType`, `VisitorType`, `Weekend`.
+
+### Kết quả (test set, 2,466 session)
+
+| Model | Accuracy | ROC AUC | Precision | Recall | F1-Score |
+|---|---|---|---|---|---|
+| **RF** | 0.895 | 0.921 | 0.661 | 0.662 | **0.661** |
+| CNN_LSTM_Maxout | 0.867 | 0.905 | 0.549 | 0.783 | 0.645 |
+| CNN | 0.868 | 0.904 | 0.552 | 0.772 | 0.644 |
+| LSTM | 0.868 | 0.908 | 0.554 | 0.770 | 0.644 |
+| MLP | 0.862 | 0.889 | 0.538 | 0.785 | 0.638 |
+| GB | 0.885 | 0.912 | 0.627 | 0.641 | 0.634 |
+| DT | 0.876 | 0.849 | 0.603 | 0.589 | 0.596 |
+| LR | 0.659 | 0.850 | 0.297 | 0.877 | 0.444 |
+| KNN | 0.763 | 0.722 | 0.340 | 0.563 | 0.424 |
+
+**F1 và ROC AUC cao hơn rõ rệt so với REES46** (ROC AUC ~0.90-0.92 so với ~0.78) — dataset này có tín hiệu dự đoán mạnh hơn nhiều, chủ yếu nhờ `PageValues` (một feature do Google Analytics tính sẵn, gần như lộ thông tin về khả năng mua). RF dẫn đầu F1, nhưng CNN_LSTM_Maxout/CNN/LSTM đạt Recall cao hơn (0.77-0.78) với Precision thấp hơn.
+
+### Permutation importance (model RF)
+
+| Feature | Importance |
+|---|---|
+| **PageValues** | **0.468** |
+| Month_enc | 0.040 |
+| ExitRates | 0.035 |
+| ProductRelated | 0.009 |
+| ProductRelated_Duration | 0.007 |
+| BounceRates | 0.005 |
+| Region | 0.004 |
+| Browser | 0.003 |
+| (còn lại) | < 0.002 |
+
+`PageValues` áp đảo hoàn toàn các feature khác (importance 0.47, gấp >10 lần feature đứng thứ 2) — khác hẳn REES46, nơi importance trải đều hơn giữa `pages_viewed`/`products_viewed`/lịch sử mua hàng.
+
+### Hạn chế của notebook này
+- **Không trả lời được RQ1/RQ2** của paper (không có category/price trong dataset).
+- `PageValues` là feature do Google Analytics tính sẵn từ dữ liệu nhiều hơn những gì các feature khác thể hiện (gần giống "target leakage nhẹ" theo kinh nghiệm cộng đồng dùng dataset này) — kết quả F1/AUC cao một phần vì lý do này, không hẳn vì mô hình tốt hơn một cách công bằng.
+- `Region`, `OperatingSystems`, `Browser` là mã số định danh thô (1, 2, 3, ...), không phải geo/device thật như paper gốc — chỉ là proxy rất yếu cho RQ3.
+- Checkpoint/outputs của notebook này nằm riêng (`checkpoints/uci/`, `outputs/uci_*.png`) để không đè lên checkpoint của notebook REES46.
