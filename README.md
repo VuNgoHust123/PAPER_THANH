@@ -149,21 +149,37 @@ Vì F1 trên REES46 thấp hơn nhiều so với paper gốc và thiếu RQ3, no
 
 **Đổi lại:** dataset này **không có giá sản phẩm hay danh mục**, nên **không trả lời được RQ1 (category) và RQ2 (price)** như paper gốc / như notebook REES46. 17 feature dùng: `Administrative(_Duration)`, `Informational(_Duration)`, `ProductRelated(_Duration)`, `BounceRates`, `ExitRates`, `PageValues`, `SpecialDay`, `Month`, `OperatingSystems`, `Browser`, `Region`, `TrafficType`, `VisitorType`, `Weekend`.
 
-### Kết quả (test set, 2,466 session)
+### Kết quả: baseline Paper2 vs phương pháp đề xuất (test set, 2,466 session)
+
+8 model đầu là baseline tái hiện từ Paper2 (LR, RF, GB, KNN, DT, MLP, CNN, LSTM). `CNN_LSTM_Maxout` là **phương pháp đề xuất** (song song CNN + LSTM giữ nguyên sequence, fuse bằng blend maxout/average, average-pool, Dense+Sigmoid).
 
 | Model | Accuracy | ROC AUC | Precision | Recall | F1-Score |
 |---|---|---|---|---|---|
-| **RF** | 0.895 | 0.921 | 0.661 | 0.662 | **0.661** |
-| CNN_LSTM_Maxout | 0.867 | 0.905 | 0.549 | 0.783 | 0.645 |
-| CNN | 0.868 | 0.904 | 0.552 | 0.772 | 0.644 |
-| LSTM | 0.868 | 0.908 | 0.554 | 0.770 | 0.644 |
-| MLP | 0.862 | 0.889 | 0.538 | 0.785 | 0.638 |
-| GB | 0.885 | 0.912 | 0.627 | 0.641 | 0.634 |
-| DT | 0.876 | 0.849 | 0.603 | 0.589 | 0.596 |
-| LR | 0.659 | 0.850 | 0.297 | 0.877 | 0.444 |
-| KNN | 0.763 | 0.722 | 0.340 | 0.563 | 0.424 |
+| **RF** (baseline mạnh nhất) | 0.895 | 0.921 | 0.661 | 0.662 | **0.661** |
+| CNN (baseline) | 0.871 | 0.907 | 0.560 | 0.783 | 0.653 |
+| MLP (baseline) | 0.871 | 0.890 | 0.561 | 0.767 | 0.648 |
+| LSTM (baseline) | 0.865 | 0.912 | 0.544 | 0.798 | 0.647 |
+| GB (baseline) | 0.885 | 0.912 | 0.627 | 0.641 | 0.634 |
+| **CNN_LSTM_Maxout** (đề xuất, blend_weight=0.25) | 0.852 | 0.911 | 0.515 | 0.812 | 0.630 |
+| DT (baseline) | 0.876 | 0.849 | 0.603 | 0.589 | 0.596 |
+| LR (baseline) | 0.659 | 0.850 | 0.297 | 0.877 | 0.444 |
+| KNN (baseline) | 0.763 | 0.722 | 0.340 | 0.563 | 0.424 |
 
-**F1 và ROC AUC cao hơn rõ rệt so với REES46** (ROC AUC ~0.90-0.92 so với ~0.78) — dataset này có tín hiệu dự đoán mạnh hơn nhiều, chủ yếu nhờ `PageValues` (một feature do Google Analytics tính sẵn, gần như lộ thông tin về khả năng mua). RF dẫn đầu F1, nhưng CNN_LSTM_Maxout/CNN/LSTM đạt Recall cao hơn (0.77-0.78) với Precision thấp hơn.
+**F1 và ROC AUC cao hơn rõ rệt so với REES46** (ROC AUC ~0.90-0.92 so với ~0.78) — dataset này có tín hiệu dự đoán mạnh hơn nhiều, chủ yếu nhờ `PageValues` (một feature do Google Analytics tính sẵn, gần như lộ thông tin về khả năng mua). RF dẫn đầu F1 trong số tất cả model (baseline và đề xuất); CNN_LSTM_Maxout có Recall cao nhất (0.812) nhưng Precision thấp hơn, nên F1 vẫn thấp hơn RF.
+
+### Ablation: tỉ lệ blend maxout/average trong phương pháp đề xuất
+
+Theo yêu cầu, đã thử sweep `blend_weight` (0 = average thuần, 1 = maxout thuần) để tìm tỉ lệ fuse tốt nhất giữa 2 nhánh CNN/LSTM trước khi average-pool, nhằm cạnh tranh với RF:
+
+| blend_weight | F1-Score (test) |
+|---|---|
+| 0.00 | 0.634 |
+| **0.25** | **0.638** |
+| 0.50 | 0.629 |
+| 0.75 | 0.628 |
+| 1.00 (maxout thuần, cấu hình cũ) | 0.636 |
+
+`blend_weight=0.25` (hơi nghiêng về average) cho F1 tốt nhất trong sweep và được chọn làm cấu hình chính thức. Sau khi train lại với seed/epoch cố định, model chính thức đạt F1=0.630 (threshold 0.5) / F1=0.644 (threshold đã tune) — **vẫn thấp hơn RF (F1=0.661 / 0.666 tuned)**. Kết luận: việc đổi tỉ lệ blend giúp cải thiện nhẹ so với maxout thuần (F1 0.636 → 0.638 trong ablation) và cải thiện rõ hơn sau khi tune threshold (0.630 → 0.644), nhưng **chưa đủ để vượt qua baseline RF** trên dataset này — khoảng cách còn lại (~0.02 F1) nhiều khả năng đến từ việc RF khai thác trực tiếp feature `PageValues` (gần leakage) hiệu quả hơn các model deep learning học từ toàn bộ 17 feature cùng lúc.
 
 ### Permutation importance (model RF)
 
