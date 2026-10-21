@@ -151,35 +151,31 @@ Vì F1 trên REES46 thấp hơn nhiều so với paper gốc và thiếu RQ3, no
 
 ### Kết quả: baseline Paper2 vs phương pháp đề xuất (test set, 2,466 session)
 
-8 model đầu là baseline tái hiện từ Paper2 (LR, RF, GB, KNN, DT, MLP, CNN, LSTM). `CNN_LSTM_Maxout` là **phương pháp đề xuất** (song song CNN + LSTM giữ nguyên sequence, fuse bằng blend maxout/average, average-pool, Dense+Sigmoid).
+8 model đầu là baseline tái hiện từ Paper2 (LR, RF, GB, KNN, DT, MLP, CNN, LSTM). `CNN_LSTM_Maxout` là **phương pháp đề xuất**, gồm 3 nhánh song song: 2 nhánh CNN1D (kernel_size=3 và kernel_size=7, cùng giữ nguyên sequence `(B, L, D)`) cộng lại với nhau theo từng phần tử, rồi nhánh CNN tổng này được maxout (lấy max theo từng phần tử) với nhánh LSTM, sau đó average-pool theo `L`, qua Dense+Sigmoid.
 
 | Model | Accuracy | ROC AUC | Precision | Recall | F1-Score |
 |---|---|---|---|---|---|
 | **RF** (baseline mạnh nhất) | 0.895 | 0.921 | 0.661 | 0.662 | **0.661** |
-| CNN (baseline) | 0.871 | 0.907 | 0.560 | 0.783 | 0.653 |
-| MLP (baseline) | 0.871 | 0.890 | 0.561 | 0.767 | 0.648 |
-| LSTM (baseline) | 0.865 | 0.912 | 0.544 | 0.798 | 0.647 |
+| CNN (baseline) | 0.863 | 0.902 | 0.538 | 0.788 | 0.640 |
+| **CNN_LSTM_Maxout** (đề xuất, 3 nhánh: CNN k=3 + CNN k=7 → maxout với LSTM) | 0.862 | 0.907 | 0.537 | 0.788 | 0.638 |
+| LSTM (baseline) | 0.860 | 0.910 | 0.532 | 0.793 | 0.637 |
 | GB (baseline) | 0.885 | 0.912 | 0.627 | 0.641 | 0.634 |
-| **CNN_LSTM_Maxout** (đề xuất, blend_weight=0.25) | 0.852 | 0.911 | 0.515 | 0.812 | 0.630 |
+| MLP (baseline) | 0.835 | 0.889 | 0.480 | 0.825 | 0.607 |
 | DT (baseline) | 0.876 | 0.849 | 0.603 | 0.589 | 0.596 |
 | LR (baseline) | 0.659 | 0.850 | 0.297 | 0.877 | 0.444 |
 | KNN (baseline) | 0.763 | 0.722 | 0.340 | 0.563 | 0.424 |
 
-**F1 và ROC AUC cao hơn rõ rệt so với REES46** (ROC AUC ~0.90-0.92 so với ~0.78) — dataset này có tín hiệu dự đoán mạnh hơn nhiều, chủ yếu nhờ `PageValues` (một feature do Google Analytics tính sẵn, gần như lộ thông tin về khả năng mua). RF dẫn đầu F1 trong số tất cả model (baseline và đề xuất); CNN_LSTM_Maxout có Recall cao nhất (0.812) nhưng Precision thấp hơn, nên F1 vẫn thấp hơn RF.
+Sau khi tune threshold trên tập validation: RF F1=0.666 (threshold 0.45), CNN_LSTM_Maxout F1=0.642 (threshold 0.55, Recall 0.785) — đứng thứ 2 sau RF, nhích hơn maxout 2-nhánh gốc một chút nhưng **vẫn chưa vượt được RF** trên dataset này.
 
-### Ablation: tỉ lệ blend maxout/average trong phương pháp đề xuất
+**F1 và ROC AUC cao hơn rõ rệt so với REES46** (ROC AUC ~0.90-0.92 so với ~0.78) — dataset này có tín hiệu dự đoán mạnh hơn nhiều, chủ yếu nhờ `PageValues` (một feature do Google Analytics tính sẵn, gần như lộ thông tin về khả năng mua). RF vẫn dẫn đầu F1 nhờ khai thác trực tiếp `PageValues`; các model deep learning (CNN, CNN_LSTM_Maxout, LSTM) có Recall cao hơn nhưng Precision thấp hơn.
 
-Theo yêu cầu, đã thử sweep `blend_weight` (0 = average thuần, 1 = maxout thuần) để tìm tỉ lệ fuse tốt nhất giữa 2 nhánh CNN/LSTM trước khi average-pool, nhằm cạnh tranh với RF:
+### Thử nghiệm kiến trúc cho phương pháp đề xuất
 
-| blend_weight | F1-Score (test) |
-|---|---|
-| 0.00 | 0.634 |
-| **0.25** | **0.638** |
-| 0.50 | 0.629 |
-| 0.75 | 0.628 |
-| 1.00 (maxout thuần, cấu hình cũ) | 0.636 |
+Đã thử 2 biến thể cho `CNN_LSTM_Maxout` trên dataset này, cả hai đều chưa vượt được RF:
+1. **2 nhánh (CNN + LSTM), fuse bằng blend maxout/average**: sweep `blend_weight` ∈ {0, 0.25, 0.5, 0.75, 1} cho F1 tốt nhất ở `blend_weight=0.25` (F1=0.638 trong ablation, 0.644 sau tune threshold khi train lại chính thức).
+2. **3 nhánh (CNN k=3 + CNN k=7 cộng lại, rồi maxout với LSTM)** — cấu hình hiện tại trong notebook: F1=0.638 (threshold 0.5) / 0.642 (tuned) — tương đương biến thể 2-nhánh-blend, không cải thiện thêm.
 
-`blend_weight=0.25` (hơi nghiêng về average) cho F1 tốt nhất trong sweep và được chọn làm cấu hình chính thức. Sau khi train lại với seed/epoch cố định, model chính thức đạt F1=0.630 (threshold 0.5) / F1=0.644 (threshold đã tune) — **vẫn thấp hơn RF (F1=0.661 / 0.666 tuned)**. Kết luận: việc đổi tỉ lệ blend giúp cải thiện nhẹ so với maxout thuần (F1 0.636 → 0.638 trong ablation) và cải thiện rõ hơn sau khi tune threshold (0.630 → 0.644), nhưng **chưa đủ để vượt qua baseline RF** trên dataset này — khoảng cách còn lại (~0.02 F1) nhiều khả năng đến từ việc RF khai thác trực tiếp feature `PageValues` (gần leakage) hiệu quả hơn các model deep learning học từ toàn bộ 17 feature cùng lúc.
+Cả hai hướng mở rộng kiến trúc đều chỉ xoay quanh F1≈0.64, cho thấy khoảng cách với RF (F1≈0.66) trên dataset này chủ yếu do RF khai thác `PageValues` hiệu quả hơn là do thiếu năng lực biểu diễn của nhánh deep learning.
 
 ### Permutation importance (model RF)
 
