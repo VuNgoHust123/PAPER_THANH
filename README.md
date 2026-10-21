@@ -53,19 +53,40 @@ Dữ liệu mất cân bằng được xử lý bằng **SMOTE** (chỉ áp dụ
 
 | Model | Accuracy | ROC AUC | Precision | Recall | F1-Score |
 |---|---|---|---|---|---|
-| **CNN_LSTM_Maxout** | 0.695 | 0.778 | 0.683 | **0.746** | **0.713** |
-| GB | 0.700 | 0.780 | 0.706 | 0.703 | 0.705 |
-| LSTM | 0.699 | 0.777 | 0.704 | 0.705 | 0.704 |
+| **GB** | 0.700 | 0.780 | 0.706 | 0.703 | **0.705** |
+| CNN_LSTM_Maxout | 0.698 | 0.778 | 0.705 | 0.696 | 0.701 |
+| LSTM | 0.699 | 0.777 | 0.710 | 0.689 | 0.700 |
 | DT | 0.689 | 0.764 | 0.697 | 0.687 | 0.692 |
 | RF | 0.681 | 0.763 | 0.687 | 0.684 | 0.686 |
+| CNN | 0.668 | 0.738 | 0.682 | 0.650 | 0.666 |
 | MLP | 0.661 | 0.746 | 0.723 | 0.540 | 0.618 |
 | LR | 0.643 | 0.695 | 0.683 | 0.553 | 0.611 |
 | KNN | 0.576 | 0.607 | 0.585 | 0.572 | 0.578 |
-| CNN | 0.631 | 0.688 | 0.699 | 0.481 | 0.570 |
 
-**`CNN_LSTM_Maxout` đạt F1 và Recall cao nhất** trong toàn bộ 9 model, nhỉnh hơn Gradient Boosting (model tốt nhất trong paper gốc). Maxout fusion tận dụng được tín hiệu local pattern từ nhánh CNN và tín hiệu tuần tự từ nhánh LSTM tốt hơn từng nhánh riêng lẻ (CNN đơn lẻ là model DL yếu nhất, F1 0.570).
+**GB, CNN_LSTM_Maxout và LSTM gần như ngang nhau** (F1 chênh lệch chỉ 0.004–0.005), xếp hạng top-3 đổi chỗ nhau giữa các lần chạy lại notebook (chạy lại với cùng seed nhưng trên GPU vẫn ra số hơi khác do cuDNN không hoàn toàn deterministic). **Kết luận thực tế:** `CNN_LSTM_Maxout` không vượt trội rõ rệt so với GB hay LSTM đơn lẻ — chênh lệch nằm trong mức nhiễu của một lần chạy, cần nhiều seed hơn để kết luận chắc chắn model nào thực sự tốt hơn.
 
 So với paper gốc (F1 tốt nhất 0.89-0.893 trên GB), F1 trên REES46 thấp hơn đáng kể — hợp lý vì thiếu feature địa lý/thiết bị và vì REES46 không có ngữ cảnh lịch sử người dùng xuyên nhiều phiên phong phú như dataset nội bộ của paper.
+
+### Threshold tuning (ngưỡng quyết định tối ưu theo F1)
+
+Ngưỡng mặc định 0.5 không tối ưu cho bài toán mất cân bằng lớp này. Với mỗi model, ngưỡng tốt nhất (maximize F1) được tìm trên **tập validation** (không dùng test set để tránh leakage), sau đó áp dụng ngưỡng đó lên test set:
+
+| Model | best_threshold | F1 (0.5) | F1 (tuned) | Precision (tuned) | Recall (tuned) | Accuracy (tuned) |
+|---|---|---|---|---|---|---|
+| GB | 0.38 | 0.705 | **0.733** | 0.632 | 0.872 | 0.677 |
+| LSTM | 0.35 | 0.700 | 0.732 | 0.626 | 0.882 | 0.672 |
+| CNN_LSTM_Maxout | 0.38 | 0.701 | 0.730 | 0.623 | 0.879 | 0.669 |
+| DT | 0.36 | 0.692 | 0.726 | 0.611 | 0.894 | 0.657 |
+| MLP | 0.31 | 0.618 | 0.718 | 0.593 | 0.910 | 0.637 |
+| CNN | 0.43 | 0.666 | 0.709 | 0.616 | 0.833 | 0.652 |
+| RF | 0.48 | 0.686 | 0.695 | 0.676 | 0.716 | 0.681 |
+| LR | 0.44 | 0.611 | 0.691 | 0.583 | 0.849 | 0.614 |
+| KNN | 0.40 | 0.579 | 0.633 | 0.555 | 0.737 | 0.566 |
+
+Quan sát:
+- Mọi model đều có ngưỡng tối ưu **thấp hơn 0.5** (0.31–0.48) — vì lớp "purchase" thực tế hiếm hơn trong dữ liệu gốc (trước SMOTE), ngưỡng 0.5 mặc định quá "khắt khe".
+- Tuning ngưỡng cải thiện F1 cho **tất cả 9 model** (ví dụ MLP tăng mạnh nhất: 0.618 → 0.718), nhưng đánh đổi: Precision giảm, Recall tăng vọt (0.72–0.91) — phù hợp nếu mục tiêu kinh doanh là **không bỏ sót khách có khả năng mua** (ví dụ để nhắm remarketing), chấp nhận báo động giả nhiều hơn.
+- RF là model duy nhất có ngưỡng tối ưu gần 0.5 (0.48) và ít thay đổi Precision/Recall sau tuning — mô hình RF vốn đã cân bằng precision/recall tốt ở ngưỡng mặc định.
 
 ### Permutation importance (model GB)
 
@@ -101,6 +122,7 @@ So với paper gốc (F1 tốt nhất 0.89-0.893 trên GB), F1 trên REES46 th�
 - [`outputs/rees46_confusion_matrices.png`](outputs/rees46_confusion_matrices.png) — confusion matrix của cả 9 model trên test set.
 - [`outputs/rees46_roc_curves.png`](outputs/rees46_roc_curves.png) — ROC curve chồng của cả 9 model (kèm AUC) trên test set.
 - [`outputs/rees46_correlation_matrix.png`](outputs/rees46_correlation_matrix.png) — ma trận tương quan Pearson giữa 14 feature cấp session.
+- [`outputs/rees46_threshold_tuning.png`](outputs/rees46_threshold_tuning.png) — đường cong F1 theo ngưỡng quyết định (tập validation) cho cả 9 model, đánh dấu ngưỡng tối ưu của từng model.
 
 ### Checkpoint
 
@@ -116,3 +138,5 @@ Toàn bộ model đã train được lưu trong `checkpoints/`:
 - Chỉ dùng 1 tháng dữ liệu (2019-Oct), lấy mẫu 80,000/573,097 session đủ điều kiện — kết quả có thể thay đổi nhẹ với seed/sample khác.
 - CNN1D và LSTM nhận feature vector per-session như một pseudo-sequence (mỗi feature = 1 time step), khác với paper gốc vốn áp dụng trên sequence sự kiện chi tiết hơn — đây là một xấp xỉ hợp lý nhưng không hoàn toàn giống kiến trúc gốc.
 - SMOTE chỉ áp dụng trên tập train (paper mô tả áp dụng trước khi split) — thay đổi này nhằm tránh data leakage, là thực hành tốt hơn.
+- Dù cố định `seed=42`, các model PyTorch chạy trên GPU không hoàn toàn deterministic (cuDNN) — chạy lại notebook có thể cho kết quả F1 lệch vài phần nghìn và đổi thứ hạng giữa các model có F1 gần nhau (đặc biệt top-3: GB, CNN_LSTM_Maxout, LSTM).
+- Ngưỡng tối ưu (threshold tuning) được chọn trên tập validation được trích từ tập train sau SMOTE; với 5 model sklearn, tập validation này vẫn nằm trong dữ liệu `GridSearchCV` đã thấy khi train (do sklearn train trên toàn bộ `X_train_bal`), nên ngưỡng tối ưu có thể hơi lạc quan hơn một chút so với dùng validation set hoàn toàn độc lập.
