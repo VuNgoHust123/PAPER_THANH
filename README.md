@@ -43,7 +43,7 @@ Dữ liệu gốc của paper là **private** (một công ty SaaS e-commerce t�
 |---|---|
 | ML truyền thống (GridSearchCV) | Logistic Regression, Random Forest, Gradient Boosting, KNN, Decision Tree |
 | Deep learning (PyTorch) | MLP, CNN1D, LSTM |
-| **Bổ sung** | **CNN_LSTM_Maxout** — 2 nhánh song song (Conv1D stack + stacked LSTM), mỗi nhánh cho ra vector đặc trưng 64 chiều, kết hợp bằng **maxout** (lấy max theo từng phần tử), qua Dense+Sigmoid để dự đoán |
+| **Bổ sung** | **CNN_LSTM_Maxout** — 2 nhánh song song (Conv1D stack + stacked LSTM), **mỗi nhánh giữ nguyên toàn bộ chuỗi `(batch, L, feat_dim)`** (L = số feature, không pool/flatten sớm), kết hợp bằng **maxout theo từng vị trí** (lấy max theo từng phần tử giữa 2 chuỗi), sau đó **Average Pooling theo L** để ra vector `(batch, feat_dim)`, qua Dense+Sigmoid để dự đoán |
 
 Dữ liệu mất cân bằng được xử lý bằng **SMOTE** (chỉ áp dụng trên tập train, tránh leakage). Train/test split 80/20, stratify theo nhãn. Với 4 model deep learning, tập train sau SMOTE được chia tiếp 85/15 thành train/val (chỉ để theo dõi learning curve, test set luôn giữ nguyên, không dùng để chọn model).
 
@@ -53,17 +53,17 @@ Dữ liệu mất cân bằng được xử lý bằng **SMOTE** (chỉ áp dụ
 
 | Model | Accuracy | ROC AUC | Precision | Recall | F1-Score |
 |---|---|---|---|---|---|
-| **GB** | 0.700 | 0.780 | 0.706 | 0.703 | **0.705** |
-| CNN_LSTM_Maxout | 0.698 | 0.778 | 0.705 | 0.696 | 0.701 |
-| LSTM | 0.699 | 0.777 | 0.710 | 0.689 | 0.700 |
+| **CNN_LSTM_Maxout** | 0.697 | 0.777 | 0.693 | 0.725 | **0.709** |
+| GB | 0.700 | 0.780 | 0.706 | 0.703 | 0.705 |
+| LSTM | 0.699 | 0.779 | 0.703 | 0.704 | 0.704 |
 | DT | 0.689 | 0.764 | 0.697 | 0.687 | 0.692 |
+| MLP | 0.676 | 0.749 | 0.675 | 0.698 | 0.686 |
 | RF | 0.681 | 0.763 | 0.687 | 0.684 | 0.686 |
-| CNN | 0.668 | 0.738 | 0.682 | 0.650 | 0.666 |
-| MLP | 0.661 | 0.746 | 0.723 | 0.540 | 0.618 |
 | LR | 0.643 | 0.695 | 0.683 | 0.553 | 0.611 |
 | KNN | 0.576 | 0.607 | 0.585 | 0.572 | 0.578 |
+| CNN | 0.623 | 0.675 | 0.718 | 0.427 | 0.535 |
 
-**GB, CNN_LSTM_Maxout và LSTM gần như ngang nhau** (F1 chênh lệch chỉ 0.004–0.005), xếp hạng top-3 đổi chỗ nhau giữa các lần chạy lại notebook (chạy lại với cùng seed nhưng trên GPU vẫn ra số hơi khác do cuDNN không hoàn toàn deterministic). **Kết luận thực tế:** `CNN_LSTM_Maxout` không vượt trội rõ rệt so với GB hay LSTM đơn lẻ — chênh lệch nằm trong mức nhiễu của một lần chạy, cần nhiều seed hơn để kết luận chắc chắn model nào thực sự tốt hơn.
+Kết quả trên là **sau khi đổi lại kiến trúc `CNN_LSTM_Maxout`**: thay vì mỗi nhánh pool về 1 vector đặc trưng rồi mới maxout, giờ cả 2 nhánh giữ nguyên chuỗi `(batch, L, feat_dim)`, maxout theo từng vị trí trong chuỗi, rồi mới Average Pooling theo `L`. Với thiết kế này, `CNN_LSTM_Maxout` lên **rank 1** (F1 0.709), nhưng vẫn **rất sát GB và LSTM** (chênh 0.004–0.005) — cùng mức nhiễu run-to-run do cuDNN không hoàn toàn deterministic đã quan sát ở bản kiến trúc cũ, nên không thể khẳng định chắc chắn đây là cải thiện có ý nghĩa thống kê mà không chạy nhiều seed.
 
 So với paper gốc (F1 tốt nhất 0.89-0.893 trên GB), F1 trên REES46 thấp hơn đáng kể — hợp lý vì thiếu feature địa lý/thiết bị và vì REES46 không có ngữ cảnh lịch sử người dùng xuyên nhiều phiên phong phú như dataset nội bộ của paper.
 
@@ -74,13 +74,13 @@ Ngưỡng mặc định 0.5 không tối ưu cho bài toán mất cân bằng l�
 | Model | best_threshold | F1 (0.5) | F1 (tuned) | Precision (tuned) | Recall (tuned) | Accuracy (tuned) |
 |---|---|---|---|---|---|---|
 | GB | 0.38 | 0.705 | **0.733** | 0.632 | 0.872 | 0.677 |
-| LSTM | 0.35 | 0.700 | 0.732 | 0.626 | 0.882 | 0.672 |
-| CNN_LSTM_Maxout | 0.38 | 0.701 | 0.730 | 0.623 | 0.879 | 0.669 |
+| LSTM | 0.39 | 0.704 | 0.733 | 0.632 | 0.872 | 0.677 |
+| CNN_LSTM_Maxout | 0.39 | 0.709 | 0.729 | 0.611 | 0.904 | 0.659 |
 | DT | 0.36 | 0.692 | 0.726 | 0.611 | 0.894 | 0.657 |
-| MLP | 0.31 | 0.618 | 0.718 | 0.593 | 0.910 | 0.637 |
-| CNN | 0.43 | 0.666 | 0.709 | 0.616 | 0.833 | 0.652 |
+| MLP | 0.41 | 0.686 | 0.718 | 0.594 | 0.908 | 0.637 |
 | RF | 0.48 | 0.686 | 0.695 | 0.676 | 0.716 | 0.681 |
 | LR | 0.44 | 0.611 | 0.691 | 0.583 | 0.849 | 0.614 |
+| CNN | 0.33 | 0.535 | 0.675 | 0.538 | 0.904 | 0.557 |
 | KNN | 0.40 | 0.579 | 0.633 | 0.555 | 0.737 | 0.566 |
 
 Quan sát:
